@@ -78,7 +78,7 @@ for k=1:numel(metaInfo_24068.Sys.subtemplate) % loop over subtemplates
 end
 % remark: this is in fact the same order as in the data_online file...
 
-%% find offset of offline vs online files
+%% find offset of offline vs online files and 24065 vs 24068
 % online files
 event_online{1}=trig_detect(data_online.trial{1}, 1, 1, 15000, 3); % find up and down going flank in the first 5 minutes in channel 1 (24065)
 event_online{2}=trig_detect(data_online.trial{1}, 53, 1, 15000, 3); % find up and down going flank in the first 5 minutes in channel 53 (24068)
@@ -95,7 +95,6 @@ if vis
   figure; subplot(2,1,1); plot(data_online.trial{1}([1 53],1:15000)'); hold on; plot(trig_online{1}, 4, 'o'); plot(trig_online{2}, 4, 'o'); title('trigger detection online data'); legend({'24065', '24068'});
 end
 
-% offline files 1 (24065) and 2 (24068)
 event_offline{1}=trig_detect(OD_offline, 1, 1, 15000, 3); % find up and down going flank in the first 5 minutes in channel 1 (24065)
 event_offline{2}=trig_detect(OD_offline, 53, 1, 15000, 3);% find up and down going flank in the first 5 minutes in channel 53 (24068)
 for k=1:2 % find for both devices
@@ -115,7 +114,19 @@ end
 offset_24065=trig_offline{1}-trig_online{1};
 offset_24068=trig_offline{2}-trig_online{2};
 
-% 
+% offsets between 24065 vs 24068
+if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
+  try
+    offset_devices=metaInfo_24065.Event{1}-metaInfo_24068.Event{1}; % if multiple events
+  catch
+    offset_devices=metaInfo_24065.Event-metaInfo_24068.Event;
+  end
+  fprintf('Correcting offset of 24065 with %d samples based on the synchronisation event that was inserted in the two offline devices (offset between 24065-24068 = %d samples) \n', offset_24065-offset_24068-offset_devices, offset_devices)
+  offset_24065=offset_24068+offset_devices;
+else
+  fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
+end  
+
 % apply offsets to the offline data 
 fprintf('Applying offset of %d samples for offline file 24065 and of %d samples for offline file 24068 \n', offset_24065, offset_24068)
 nsamples=size(OD_offline,2)-max(offset_24065, offset_24068);
@@ -134,23 +145,14 @@ data_combi.hdr.nSamples=nsamples;
 %% read in events
 events=ft_read_event(filename_online, 'chanindx', -1, 'type', 'event');
 if vis
-figure; plot([events.sample], ones(size(events)), '+');
+  figure; plot([events.sample], ones(size(events)), '+');
 end
-% 
-% xdf_file=fullfile(root_dir, 'source_standard', subject, 'stim', sprintf('%s_task-gait_rec-%02d_triggerslabrecorder.xdf', subject, rec));
-% xdfevent=ft_read_event(xdf_file);
-% xdfevent=xdfevent(strcmp({xdfevent.type}, 'Digital Triggers @ lsldert02'));
-% xdfevent=xdfevent(3:end); % first two are initialisation events
-% lsl_timestamps=[xdfevent.timestamp]-xdfevent(1).timestamp;
-% 
-% figure; plot(oxy_timestamps, ones(size(event)), 'b+');
-% hold on; plot(lsl_timestamps, ones(size(event)), 'r+');
-% figure; plot(lsl_timestamps-oxy_timestamps)
-% 
+
 %% check data
 if vis
-  figure; subplot(2,1,1); plot(data_online.trial{1}(3,50:end), 'b-'); hold on; plot(data_combi.trial{1}(3,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24065 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
-  subplot(2,1,2); plot(data_online.trial{1}(53,50:end), 'b-'); hold on; plot(data_combi.trial{1}(53,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24068 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
+  figure; subplot(3,1,1); plot(data_online.trial{1}(3,50:end), 'b-'); hold on; plot(data_combi.trial{1}(3,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24065 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
+  subplot(3,1,2); plot(data_online.trial{1}(53,50:end), 'b-'); hold on; plot(data_combi.trial{1}(53,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24068 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
+  subplot(3,1,3); plot(data_combi.trial{1}(99, 50:end)); hold on; plot(data_combi.trial{1}(103, 50:end)); title(sprintf('sub-%s rec-%s: 24065 vs 24068', fparts.sub, fparts.rec)); legend({'24065', '24068'})
 
   cfg                = [];
   cfg.preproc.demean = 'yes'; % substracts the mean value (only in the plot)
