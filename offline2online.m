@@ -114,6 +114,18 @@ end
 offset_24065=trig_offline{1}-trig_online{1};
 offset_24068=trig_offline{2}-trig_online{2};
 
+% % offsets between 24065 vs 24068
+% if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
+%   try
+%     offset_devices=metaInfo_24065.Event{1}-metaInfo_24068.Event{1}; % if multiple events
+%   catch
+%     offset_devices=metaInfo_24065.Event-metaInfo_24068.Event;
+%   end
+%   fprintf('Correcting offset of 24065 with %d samples based on the synchronisation event that was inserted in the two offline devices (offset between 24065-24068 = %d samples) \n', offset_24065-offset_24068-offset_devices, offset_devices)
+%   offset_24065=offset_24068+offset_devices;
+% else
+%   fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
+% end  
 % offsets between 24065 vs 24068
 if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
   try
@@ -121,8 +133,11 @@ if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
   catch
     offset_devices=metaInfo_24065.Event-metaInfo_24068.Event;
   end
-  fprintf('Correcting offset of 24065 with %d samples based on the synchronisation event that was inserted in the two offline devices (offset between 24065-24068 = %d samples) \n', offset_24065-offset_24068-offset_devices, offset_devices)
-  offset_24065=offset_24068+offset_devices;
+  if abs((offset_24065-offset_24068)-offset_devices)>25 % if devices are off with more than 0.5 seconds, throw error
+    error('Desynchronization between the devices with more than 0.5 seconds')
+  else
+    fprintf('Based on the offline events, there might be a delay between the devices of %.3d seconds.', (abs((offset_24065-offset_24068)-offset_devices))/50);
+  end
 else
   fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
 end  
