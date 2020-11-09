@@ -2,6 +2,7 @@ function [data_combi, events]=offline2online(filename_online, varargin)
 
 %% initialisation
 vis=ft_getopt(varargin, 'vis', true);
+delay_devices=ft_getopt(varargin, 'delay_devices'); %24065-24068 in samples
 
 [path, name, ext]=fileparts(filename_online);
 fparts=regexp(name, 'sub-(?<sub>\w+)_task-gait_acq-(?<acq>\w+)_rec-(?<rec>\d+)_nirs', 'names');
@@ -114,6 +115,12 @@ end
 offset_24065=trig_offline{1}-trig_online{1};
 offset_24068=trig_offline{2}-trig_online{2};
 
+% correct for shift between devices
+if delay_devices
+  fprintf('correcting for shift between devices with offset of %d samples', delay_devices)
+  offset_24068=offset_24068-delay_devices
+end
+
 % % offsets between 24065 vs 24068
 % if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
 %   try
@@ -127,7 +134,7 @@ offset_24068=trig_offline{2}-trig_online{2};
 %   fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
 % end  
 % offsets between 24065 vs 24068
-if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
+if isfield(metaInfo_24065, 'Event') & isfield(metaInfo_24068, 'Event')
   try
     offset_devices=metaInfo_24065.Event{1}-metaInfo_24068.Event{1}; % if multiple events
   catch
@@ -136,7 +143,7 @@ if ~isempty(metaInfo_24065.Event) & ~isempty(metaInfo_24068.Event)
   if abs((offset_24065-offset_24068)-offset_devices)>25 % if devices are off with more than 0.5 seconds, throw error
     error('Desynchronization between the devices with more than 0.5 seconds')
   else
-    fprintf('Based on the offline events, there might be a delay between the devices of %.3d seconds.', (abs((offset_24065-offset_24068)-offset_devices))/50);
+    fprintf('Based on the offline events, there might be a delay between the devices of %.3f seconds. \n', (abs((offset_24065-offset_24068)-offset_devices))/50);
   end
 else
   fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
@@ -159,9 +166,6 @@ data_combi.hdr.nSamples=nsamples;
 
 %% read in events
 events=ft_read_event(filename_online, 'chanindx', -1, 'type', 'event');
-if vis
-  figure; plot([events.sample], ones(size(events)), '+');
-end
 
 %% check data
 if vis
@@ -179,7 +183,7 @@ if vis
   cfg.fontsize=5;
   cfg.continuous     = 'yes';
   cfg.blocksize  = 60;
-  cfg.nirsscale =30;
+  cfg.nirsscale =100;
   ft_databrowser(cfg, data_combi);
 end
 
