@@ -40,7 +40,6 @@ for i=1:length(lsl_streams)
   end
   sync(i)=sum(contains(REC.(lsl_streams{i}).Data, 'sync'));
 end
-if 
 if length(unique(sync))~=1
   warning('The number of sync events were not equal between the lsl streams')
 end
@@ -66,22 +65,22 @@ oxy4_nirsevents=nirsevents(contains({nirsevents.value}, {'start_run', 'stop_run'
 if height(lsl_nirsevents)~= length(oxy4_nirsevents)
   warning('number of events in nirs data was not as expected')
 end
-if any(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]-oxy4_nirsevents(1).sample)/50)>0.04)
-  warning('some events of .oxy4 file differed with more than 40 msec with the lsl stream (max difference = %f)', max(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]-oxy4_nirsevents(1).sample)/50)))
+if any(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]'-oxy4_nirsevents(1).sample)/50)>0.04)
+  warning('some events of .oxy4 file differed with more than 40 msec with the lsl stream (max difference = %f)', max(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]'-oxy4_nirsevents(1).sample)/50)))
 else
-  fprintf('maximum delay between .oxy4 file and lsl stream was %.03f seconds \n',  max(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]-oxy4_nirsevents(1).sample)/50)))
+  fprintf('maximum delay between .oxy4 file and lsl stream was %.03f seconds \n',  max(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]'-oxy4_nirsevents(1).sample)/50)))
 end
 figure; plot([oxy4_nirsevents.sample], ones(size(oxy4_nirsevents)), '+'); title('nirs events');
 % convert events to table
 fsample=data_combi.fsample;
 nirs_events=struct2table(oxy4_nirsevents);
 onset=([oxy4_nirsevents(:).sample]'-1)/fsample;
+onset_corrected=onset-lsl_nirsevents.correction;
 sample=[oxy4_nirsevents(:).sample]';
-onset_corrected=onset(:)-lsl_nirsevents.correction(:);
 duration=zeros(length(onset),1);
 type=repmat({'sync-event'}, size(onset));
 value={oxy4_nirsevents(:).value}';
-nirs_events=table(onset, sample, onset_corrected, duration, type, value);
+nirs_events=table(onset, sample, onset_corrected,  duration, type, value);
 % save events
 save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-%s_events.mat', fparts.sub, fparts.rec)), 'nirs_events')
 

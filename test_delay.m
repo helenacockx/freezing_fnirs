@@ -38,7 +38,7 @@ for i=3:6
 end
 legend({'lsldert1', 'lsldert2', 'lsldert3', 'lsldert4'})
 ylabel('time delay (sec.)'); xlabel('timestamps');
-ylim([0 0.05]);
+ylim([-0.005 0.05]);
 
 subplot(3,1,3); title('delay between raspberry pies (relative to lsldert4)'); hold on;
 for i=3:5
@@ -46,30 +46,30 @@ for i=3:5
 end
 legend({'lsldert1', 'lsldert2', 'lsldert3'})
 ylabel('time delay (sec.)'); xlabel('timestamps');
-ylim([0 0.05]);
+ylim([-0.005 0.05]);
 
 %% calculate corrections relative to lsldert4
 % lsldert04
-idx_events0=find(endsWith(REC.lsldert0_events.Data, {'TTL_on', 'TTL_off', 'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}));
-lsl_timestamps0=lsl_correct_lsl_timestamps(REC.lsldert0_events);
-lsl_timestamps0=lsl_timestamps0(idx_events0)';
-correction=zeros(length(lsl_timestamps0), 1);
-duration=zeros(length(lsl_timestamps0), 1);
-type=repmat({'lsldert0_events'},length(lsl_timestamps0),1);
+idx_events4=find(endsWith(REC.lsldert4_events.Data, {'TTL_on', 'TTL_off', 'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}));
+lsl_timestamps4=lsl_correct_lsl_timestamps(REC.lsldert4_events);
+lsl_timestamps4=lsl_timestamps4(idx_events4)';
+correction=zeros(length(lsl_timestamps4), 1);
+duration=zeros(length(lsl_timestamps4), 1);
+type=repmat({'lsldert4_events'},length(lsl_timestamps4),1);
 % start making a table
-lsl_events=table(lsl_timestamps0, correction, duration, type, {REC.lsldert0_events.Data{idx_events0}}', 'VariableNames', {'onset', 'correction', 'duration', 'type', 'value'})
+lsl_events=table(lsl_timestamps4, correction, duration, type, {REC.lsldert4_events.Data{idx_events4}}', 'VariableNames', {'onset', 'correction', 'duration', 'type', 'value'});
 % loop over other lsl streams and calculate corrections relative to
-% lsldert00
-lsl_streams={'lsldert1_events', 'lsldert2_events', 'lsldert3_events', 'lsldert4_events'};
-for i=1:4
+% lsldert04
+lsl_streams={'lsldert1_events', 'lsldert2_events', 'lsldert3_events'};
+for i=1:3
   idx_eventsi=find(endsWith(REC.(lsl_streams{i}).Data, {'TTL_on', 'TTL_off', 'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}));
   lsl_timestampsi=lsl_correct_lsl_timestamps(REC.(lsl_streams{i}));
   lsl_timestampsi=lsl_timestampsi(idx_eventsi)';
-  if length(lsl_timestampsi)~= length(lsl_timestamps0)
-    warning('%s has not the same number of events as lsldert0_events. Not calculating corrections', lsl_streams{i})
+  if length(lsl_timestampsi)~= length(lsl_timestamps4)
+    warning('%s has not the same number of events as lsldert4_events. Not calculating corrections', lsl_streams{i})
     continue
   end
-  lsl_corri=lsl_timestampsi-lsl_timestamps0;
+  lsl_corri=lsl_timestampsi-lsl_timestamps4;
   duration=zeros(length(lsl_timestampsi),1);
   type=repmat({lsl_streams{i}},length(lsl_timestampsi),1);
   % make table
