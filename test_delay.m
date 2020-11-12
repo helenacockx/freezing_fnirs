@@ -74,6 +74,11 @@ for i=1:3
   type=repmat({lsl_streams{i}},length(lsl_timestampsi),1);
   % make table
   tablei=table(lsl_timestampsi, lsl_corri, duration, type, {REC.(lsl_streams{i}).Data{idx_eventsi}}', 'VariableNames', {'onset', 'correction', 'duration', 'type', 'value'});
+  if any(lsl_corri>0.02)
+    warning('some events of %s had a delay >20 msec:', lsl_streams{i})
+    idx=find(lsl_corri>0.02);
+    display(tablei(idx,:))
+  end
   % concatenate with lsl_events
   lsl_events=[lsl_events; tablei];
 end
