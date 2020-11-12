@@ -1,16 +1,18 @@
 %% initialisation
-close all; clear all
-ID='PD11';
-sub=['sub-' ID];
+close all; clear all; diary off
+
 root_dir='C:\Users\helen\Documents\freezing_fnirs\data';
 addpath C:\Users\helen\Documents\MATLAB\matlab_toolboxes\fix_artinis
 addpath(fullfile(root_dir, 'scripts'))
 dbstop if error
-% completed subjects: PD11, HC66
 
-runs=[1:5];
-num_run=5;
-num_block=13; 
+ID='HC06';
+sub=['sub-' ID];
+sub_info=load_sub_info(ID);
+runs=sub_info.runs;
+num_run=sub_info.num_run;
+num_block=sub_info.num_block; 
+% completed subjects: PD11, HC66
 
 %nirs
 delay_devices=0;
@@ -25,7 +27,11 @@ logname=fullfile(root_dir, 'processed', sub, sprintf('%s_load_data.log', sub)); 
 
 %% load REC variable
 fprintf('\n.........loading lsl data.........\n')
-triggerinfo=dir(fullfile(root_dir, 'source_standard', sub, 'stim', '*rec-0*_triggerinfo.mat'));
+if strcmp(ID, 'HC06') % only use rec-03
+  triggerinfo=dir(fullfile(root_dir, 'source_standard', sub, 'stim', '*rec-03_triggerinfo.mat'));
+else
+  triggerinfo=dir(fullfile(root_dir, 'source_standard', sub, 'stim', '*rec-0*_triggerinfo.mat'));
+end
 load(fullfile(triggerinfo.folder, triggerinfo.name)); 
 
 % check number of events
@@ -88,11 +94,11 @@ save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-
 run=[];
 start_runs=oxy4_nirsevents(contains({oxy4_nirsevents.value}, 'start_run'));
 stop_runs=oxy4_nirsevents(contains({oxy4_nirsevents.value}, 'stop_run'));
-for r=runs
+for r=1:num_run
   % data
   cfg=[];
   cfg.trl=[start_runs(r).sample stop_runs(r).sample 0];
-  run(r).data_nirs.data_raw=ft_redefinetrial(cfg, data_combi);
+  run(runs(r)).data_nirs.data_raw=ft_redefinetrial(cfg, data_combi);
 end
   
 % save data
@@ -105,9 +111,9 @@ lslstream='lsldert4_events';
 start_runs=lsl_events(contains(lsl_events.type, lslstream) & contains(lsl_events.value, 'TTL_on'),:);
 stop_runs=lsl_events(contains(lsl_events.type, lslstream) & contains(lsl_events.value, 'TTL_off'),:);
 
-for r=runs
-  fprintf('\n LOADING RUN %d \n', r)
-  mvnxfile=dir(fullfile(root_dir, 'source_standard', sub, 'motion', sprintf('*_run-%02d*.mvnx', r)));
+for r=1:num_run
+  fprintf('\n LOADING RUN %d \n', runs(r))
+  mvnxfile=dir(fullfile(root_dir, 'source_standard', sub, 'motion', sprintf('*_run-%02d*.mvnx', runs(r))));
   if isempty(mvnxfile)
     error('could not find the correct motion file');
   end
@@ -118,16 +124,16 @@ for r=runs
   % check duration of recording
   if abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end))>0.1
     if (stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)<0
-      warning('duration of .mvnx file run %d differed with more than 100 msec of what was expected. .mvnx was %d seconds longer than expected.', r, abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)))
+      warning('duration of .mvnx file run %d differed with more than 100 msec of what was expected. .mvnx was %d seconds longer than expected.', runs(r), abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)))
     else
-      warning('duration of .mvnx file run %d differed with more than 100 msec of what was expected. .mvnx was %d seconds shorter than expected.', r, abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)))
+      warning('duration of .mvnx file run %d differed with more than 100 msec of what was expected. .mvnx was %d seconds shorter than expected.', runs(r), abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)))
     end
   else
-    fprintf('maximum drift between the .mvnx file run %d and lsl stream of %.03f seconds \n', r,abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)))
+    fprintf('maximum drift between the .mvnx file run %d and lsl stream of %.03f seconds \n', runs(r),abs((stop_runs.onset(r)-start_runs.onset(r))-data_raw.time{1}(end)))
   end
   % check data by plotting trajectory of COM
   idx_COM=match_str(data_raw.label, {'seg_COM_centerOfMass_X','seg_COM_centerOfMass_Y','seg_COM_centerOfMass_Z'});
-  figure; plot3(data_raw.trial{1}(idx_COM(1),:), data_raw.trial{1}(idx_COM(2),:),data_raw.trial{1}(idx_COM(3),:), '.'); view(2);title(sprintf('gait trajectory of run %d', r)); xlabel('X'); ylabel('Y')
+  figure; plot3(data_raw.trial{1}(idx_COM(1),:), data_raw.trial{1}(idx_COM(2),:),data_raw.trial{1}(idx_COM(3),:), '.'); view(2);title(sprintf('gait trajectory of run %d', runs(r))); xlabel('X'); ylabel('Y')
   % make events
   onset = [0 data_raw.time{1}(end)]';
   onset_corrected = [0-start_runs.correction(r) data_raw.time{1}(end)-stop_runs.correction(r)]';
@@ -136,7 +142,7 @@ for r=runs
   value = {'start_run', 'stop_run'}';
   run_events=table(onset, onset_corrected, duration, type, value);
   % save data and events
-  run(r).data_motion.data_raw=data_raw;
+  run(runs(r)).data_motion.data_raw=data_raw;
   [~, n, ~]=fileparts(mvnxfile.name);
   fparts=regexp(mvnxfile.name, 'sub-(?<sub>\w+)_task-gait_run-(?<run>\d+)_motion', 'names');
   save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_motion.mat', fparts.sub, fparts.run)), 'data_raw');
@@ -164,6 +170,21 @@ for a=1:length(acq)
   lsl_videoevents=lsl_events(contains(lsl_events.type, lslstream{a}) & contains(lsl_events.value, {'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}),:);
   if height(lsl_videoevents)~=length(onset)
     warning('cam %s did not contain the same amount of events as the lsl stream', acq{a})
+    % try only selecting the events of the given runs (e.g. HC06)
+    start_runs_idx=find(strcmp(value, 'start_run'));
+    stop_runs_idx=find(strcmp(value, 'stop_run'));
+    run_values={}; run_onsets=[];
+    for r=1:length(runs)
+      run_values=[run_values; value(start_runs_idx(runs(r)):stop_runs_idx(runs(r)))];
+      run_onsets=[run_onsets; onset(start_runs_idx(runs(r)):stop_runs_idx(runs(r)))];
+    end
+    if isequal(length(run_values), length(run_onsets), height(lsl_videoevents))
+      fprintf('only selecting the events of the given runs \n')
+      onset=run_onsets;
+      value=run_values;
+    else
+      error('Tried to only select the events of the given runs, but still not the same amount of events as the lsl stream')
+    end
   end
   if any(abs(onset-onset(1)-([lsl_videoevents.onset(:)]-lsl_videoevents.onset(1)))>0.1)
     warning('some events of video recording of cam %s differed with more than 100 msec with the lsl stream (max difference = %f)', max(abs(onset-onset(1)- ([lsl_videoevents.onset(:)]-lsl_videoevents.onset(1)))))
@@ -185,6 +206,7 @@ end
 % sync-events
 lslstream='lsldert4_events'; 
 lsl_syncevents=lsl_events(contains(lsl_events.type, lslstream)&contains(lsl_events.value, {'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}),:);
+lsl_syncevents=removevars(lsl_syncevents, 'correction');
 start_runs=lsl_syncevents(contains(lsl_syncevents.value, 'start_run'),:);
 stop_runs=lsl_syncevents(contains(lsl_syncevents.value, 'stop_run'),:);
 % big table
@@ -192,17 +214,17 @@ events=lsl_syncevents;
 events.onset=events.onset(:)-start_runs.onset(1); % relative to first start_run
 events.type(:)=repmat({'lslevent'},height(events),1);
 % split into runs
-for r=runs
+for r=1:length(runs)
   run_events=lsl_syncevents((lsl_syncevents.onset(:)>=start_runs.onset(r) & lsl_syncevents.onset(:)<=stop_runs.onset(r)),:);
   run_events.onset=run_events.onset(:)-start_runs.onset(r);
   run_events.type(:)=repmat({'lslevent'},height(run_events),1);
-  run(r).events = run_events; % store in runs
+  run(runs(r)).events = run_events; % store in runs
 end
 
 % FOG events
 lsldert1_timestamps=lsl_correct_lsl_timestamps(REC.lsldert1_events);
 lsl_FOGevents_idx=find(endsWith(REC.lsldert1_events.Data, 'FOG'));
-if ~isempty(lsl_FOGevents_idx)
+if length(lsl_FOGevents_idx)>1
   onset=lsldert1_timestamps(lsl_FOGevents_idx)'-start_runs.onset(1);
   duration=zeros(size(onset));
   type=repmat({'lslevent'},length(onset),1);
