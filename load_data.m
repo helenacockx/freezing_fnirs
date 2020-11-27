@@ -6,7 +6,7 @@ addpath C:\Users\helen\Documents\MATLAB\matlab_toolboxes\fix_artinis
 addpath(fullfile(root_dir, 'scripts'))
 dbstop if error
 
-ID='HC06';
+ID='PD90';
 sub=['sub-' ID];
 sub_info=load_sub_info(ID);
 runs=sub_info.runs;
@@ -56,18 +56,29 @@ lsl_events=test_delay(REC);
 %% load nirs data
 fprintf('\n.........loading nirs data.........\n')
 oxy4files=dir(fullfile(root_dir, 'source_standard', sub, 'nirs', '*acq-online*.oxy4'));
-[data_combi, nirsevents]=offline2online(fullfile(oxy4files.folder, oxy4files.name), 'delay_devices', delay_devices);
+r=1;
+run=[];
+
+for f=1:length(oxy4files)
+[data_combi, nirsevents]=offline2online(fullfile(oxy4files(f).folder, oxy4files(f).name), 'delay_devices', delay_devices);
 % temporary save data_combi
-fparts=regexp(oxy4files.name, 'sub-(?<sub>\w+)_task-gait_acq-(?<acq>\w+)_rec-(?<rec>\d+)_nirs', 'names');
+fparts=regexp(oxy4files(f).name, 'sub-(?<sub>\w+)_task-gait_acq-(?<acq>\w+)_rec-(?<rec>\d+)_nirs', 'names');
 save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-%s_nirs.mat', fparts.sub, fparts.rec)), 'data_combi')
 
 % check events
-[hdr, ~]=readoxy4(fullfile(oxy4files.folder, oxy4files.name));
+[hdr, ~]=readoxy4(fullfile(oxy4files(f).folder, oxy4files(f).name));
 stream=hdr.oxy3.Device{3}.Attributes.desc;
 streamnumber=regexp(stream, '0(\d)', 'tokens');
 lslstream=sprintf('lsldert%s_events', streamnumber{1}{1}); 
 lsl_nirsevents=lsl_events(contains(lsl_events.type, lslstream)&contains(lsl_events.value, {'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}),:);
 oxy4_nirsevents=nirsevents(contains({nirsevents.value}, {'start_run', 'stop_run', 'start_block', 'stop_block', 'sync'}));
+if length(oxy4files)>1; %  multiple nirs recordings
+  fprintf('splitting lsl events according to number of runs for each nirs recording \n')
+  num_run_rec=sum(contains({oxy4_nirsevents.value}, 'start_run'));
+    start_rec=find(contains(lsl_nirsevents.value, 'start_run'),r);
+    stop_rec=find(contains(lsl_nirsevents.value, 'stop_run'),num_run_rec+r-1);
+  lsl_nirsevents=lsl_nirsevents(start_rec(end):stop_rec(end),:);
+end
 if height(lsl_nirsevents)~= length(oxy4_nirsevents)
   warning('number of events in nirs data was not as expected')
 end
@@ -91,18 +102,26 @@ nirs_events=table(onset, sample, onset_corrected,  duration, type, value);
 save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-%s_events.mat', fparts.sub, fparts.rec)), 'nirs_events')
 
 % split in runs
-run=[];
 start_runs=oxy4_nirsevents(contains({oxy4_nirsevents.value}, 'start_run'));
 stop_runs=oxy4_nirsevents(contains({oxy4_nirsevents.value}, 'stop_run'));
-for r=1:num_run
+for i=1:length(start_runs)
   % data
   cfg=[];
-  cfg.trl=[start_runs(r).sample stop_runs(r).sample 0];
+  cfg.trl=[start_runs(i).sample stop_runs(i).sample 0];
   run(runs(r)).data_nirs.data_raw=ft_redefinetrial(cfg, data_combi);
+  r=r+1;
 end
-  
+% for r=ri:ri+num_run_rec-1
+%   % data
+%   cfg=[];
+%   cfg.trl=[start_runs(r-ri+1).sample stop_runs(r-ri+1).sample 0];
+%   run(runs(r)).data_nirs.data_raw=ft_redefinetrial(cfg, data_combi);
+% end
+end % loop over rec
+
 % save data
 save(fullfile(root_dir, 'processed', sub, sprintf('sub-%s_run.mat', ID)), 'run')
+
 
 %% load motion data
 % select the corresponding lsl events
