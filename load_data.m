@@ -9,7 +9,7 @@ addpath C:\Users\helen\Documents\MATLAB\matlab_toolboxes\fix_artinis
 addpath(fullfile(root_dir, 'scripts'))
 dbstop if error
 
-ID='HC13';
+ID='HC66';
 sub=['sub-' ID];
 sub_info=load_sub_info(ID);
 runs=sub_info.runs;
@@ -119,15 +119,11 @@ for i=1:height(start_runs)
   % data
   cfg=[];
   cfg.trl=[start_runs.sample(i) stop_runs.sample(i) 0];
-  run(runs(r)).data_nirs.data_raw=ft_redefinetrial(cfg, data_combi);
+  data_run=ft_redefinetrial(cfg, data_combi);
+  data_run=rmfield(data_run, 'sampleinfo'); data_run.cfg=rmfield(data_run.cfg, 'trl'); % remove sampleinfo, otherwise FT still considers the original sample numers
+  run(runs(r)).data_nirs.data_raw=data_run;
   r=r+1;
 end
-% for r=ri:ri+num_run_rec-1
-%   % data
-%   cfg=[];
-%   cfg.trl=[start_runs(r-ri+1).sample stop_runs(r-ri+1).sample 0];
-%   run(runs(r)).data_nirs.data_raw=ft_redefinetrial(cfg, data_combi);
-% end
 end % loop over rec
 
 % save data
@@ -183,9 +179,12 @@ for r=1:num_run
   save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_motion.mat', fparts.sub, fparts.run)), 'data_raw');
   save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_events.mat', fparts.sub, fparts.run)), 'run_events');
   % realign time axis and save in run
+  start_run=onset_corrected(1);
+  stop_run=onset_corrected(2);
   cfg=[];
-  cfg.offset=delay*data_raw.fsample;
+  cfg.trl=[round(start_run*data_raw.fsample)+1 round(stop_run*data_raw.fsample)+1 0];
   data_run=ft_redefinetrial(cfg, data_raw);
+  data_run=rmfield(data_run, 'sampleinfo'); data_run.cfg=rmfield(data_run.cfg, 'trl'); % remove sampleinfo, otherwise FT still considers the original sample numbers
   run(runs(r)).data_motion.data_raw=data_run;
 end
 
