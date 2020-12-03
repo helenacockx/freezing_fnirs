@@ -84,12 +84,12 @@ end
 event_online{1}=trig_detect(data_online.trial{1}, 1, 1, 15000, 3); % find up and down going flank in the first 5 minutes in channel 1 (24065)
 event_online{2}=trig_detect(data_online.trial{1}, 53, 1, 15000, 3); % find up and down going flank in the first 5 minutes in channel 53 (24068)
 for k=1:2 % find for both devices
-  for i=1:length(event_online{k})-1
-    if contains(event_online{k}(i).type, 'up') && contains(event_online{k}(i+1).type, 'down') && (event_online{k}(i+1).sample-event_online{k}(i).sample>50 & event_online{k}(i+1).sample-event_online{k}(i).sample<500)
-      fprintf('upgoing flank detected at sample %d, verify in the figure if this is correct \n', event_online{k}(i).sample)
-      break
+    for i=1:length(event_online{k})-1
+      if contains(event_online{k}(i).type, 'up') && contains(event_online{k}(i+1).type, 'down') && (event_online{k}(i+1).sample-event_online{k}(i).sample>50 & event_online{k}(i+1).sample-event_online{k}(i).sample<1000)
+        fprintf('upgoing flank detected at sample %d, verify in the figure if this is correct \n', event_online{k}(i).sample)
+        break
+      end
     end
-  end
   trig_online{k}=event_online{k}(i).sample;
 end
 if vis
@@ -100,7 +100,7 @@ event_offline{1}=trig_detect(OD_offline, 1, 1, 15000, 3); % find up and down goi
 event_offline{2}=trig_detect(OD_offline, 53, 1, 15000, 3);% find up and down going flank in the first 5 minutes in channel 53 (24068)
 for k=1:2 % find for both devices
   for i=1:length(event_offline{k})-1
-    if contains(event_offline{k}(i).type, 'up') && contains(event_offline{k}(i+1).type, 'down') && (event_offline{k}(i+1).sample-event_offline{k}(i).sample>50 & event_offline{k}(i+1).sample-event_offline{k}(i).sample<500)
+    if contains(event_offline{k}(i).type, 'up') && contains(event_offline{k}(i+1).type, 'down') && (event_offline{k}(i+1).sample-event_offline{k}(i).sample>50 & event_offline{k}(i+1).sample-event_offline{k}(i).sample<1000)
       fprintf('upgoing flank detected at sample %d, verify in the figure if this is correct \n', event_offline{k}(i).sample)
       break
     end
@@ -116,9 +116,9 @@ offset_24065=trig_offline{1}-trig_online{1};
 offset_24068=trig_offline{2}-trig_online{2};
 
 % correct for shift between devices
-if delay_devices
+if delay_devices % = 24068-24065
   fprintf('correcting for shift between devices with offset of %d samples', delay_devices)
-  offset_24068=offset_24068-delay_devices
+  offset_24065=offset_24065-delay_devices;
 end
 
 % % offsets between 24065 vs 24068
@@ -134,19 +134,39 @@ end
 %   fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
 % end  
 % offsets between 24065 vs 24068
-if isfield(metaInfo_24065, 'Event') & isfield(metaInfo_24068, 'Event')
+
+if isfield(metaInfo_24065, 'Event') & isfield(metaInfo_24068, 'Event') & ~strcmp(fparts.sub, 'HC42') % erroneuos events were inserted in HC42
   try
-    offset_devices=metaInfo_24065.Event{1}-metaInfo_24068.Event{1}; % if multiple events
+    if length([metaInfo_24065.Event{:}])==length([metaInfo_24068.Event{:}])
+      delays_offline=[metaInfo_24068.Event{:}]'-[metaInfo_24065.Event{:}]';
+      table(delays_offline)
+    end
+    if strcmp(fparts.sub, 'HC76') % errnuous first 24065 event
+       offset_devices=metaInfo_24068.Event{1}-metaInfo_24065.Event{2};
+    else 
+      offset_devices=metaInfo_24068.Event{1}-metaInfo_24065.Event{1}; % if multiple events
+    end
   catch
-    offset_devices=metaInfo_24065.Event-metaInfo_24068.Event;
+    offset_devices=metaInfo_24068.Event-metaInfo_24065.Event;
   end
-  if abs((offset_24065-offset_24068)-offset_devices)>25 % if devices are off with more than 0.5 seconds, throw error
-    error('Desynchronization between the devices with more than 0.5 seconds')
+  if abs((offset_24068-offset_24065)-offset_devices)>25 % if devices are off with more than 0.5 seconds, throw error
+    warning('Desynchronization between the devices with more than 0.5 seconds')
   else
-    fprintf('Based on the offline events, there might be a delay between the devices of %.3f seconds. \n', (abs((offset_24065-offset_24068)-offset_devices))/50);
+    fprintf('Based on the offline events, there might be a delay between the devices in the online file of %.03f seconds (delay in offline file was %d samples). \n', (abs(offset_devices-(offset_24068-offset_24065)))/50, offset_devices);
   end
+  fprintf('correcting for this delay... \n')
+  delay_devices=offset_devices-(offset_24068-offset_24065);
+  offset_24065=offset_24065-delay_devices;
 else
-  fprintf('No synchronisation event was inserted in the offline files. Please check if both devices are well synchronized \n');
+  figure; plot(ADvalues_24065(3, 50:end)); hold on; plot(ADvalues_24068(3, 50:end)); title(sprintf('sub-%s rec-%s: 24065 vs 24068', fparts.sub, fparts.rec)); legend({'24065', '24068'});
+  fprintf('No synchronisation event was inserted in the offline files. Please check in the figure what the delay is between the two offline files \n');
+  pause;  confirm=0;
+  while confirm~=1
+    offset_devices=input('What is the delay between 24068-24065 (in samples)? \n')
+    confirm = input('Is this the definite answer? 1/0 \n');
+  end
+  delay_devices=offset_devices-(offset_24068-offset_24065);
+  offset_24065=offset_24065-delay_devices;
 end  
 
 % apply offsets to the offline data 
@@ -164,15 +184,53 @@ data_combi.time{1}=[0:1/data_combi.fsample:(nsamples-1)/data_combi.fsample];
 data_combi.trial{1}=data;
 data_combi.hdr.nSamples=nsamples;
 
-%% read in events
-events=ft_read_event(filename_online, 'chanindx', -1, 'type', 'event');
-
-%% check data
+% check data
 if vis
   figure; subplot(3,1,1); plot(data_online.trial{1}(3,50:end), 'b-'); hold on; plot(data_combi.trial{1}(3,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24065 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
   subplot(3,1,2); plot(data_online.trial{1}(53,50:end), 'b-'); hold on; plot(data_combi.trial{1}(53,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24068 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
   subplot(3,1,3); plot(data_combi.trial{1}(99, 50:end)); hold on; plot(data_combi.trial{1}(103, 50:end)); title(sprintf('sub-%s rec-%s: 24065 vs 24068', fparts.sub, fparts.rec)); legend({'24065', '24068'})
+end
 
+%% read in events
+events=ft_read_event(filename_online, 'chanindx', -1, 'type', 'event');
+% check with offline events if existent
+start_runs=events(strcmp({events.value}, 'LSL start_run'));
+try
+if length(start_runs)==length(metaInfo_24068.Event)
+  delays_event=([metaInfo_24065.Event{:}]'-offset_24065)-[start_runs.sample]';
+  table(delays_event)
+  delays_event=([metaInfo_24068.Event{:}]'-offset_24068)-[start_runs.sample]';
+  table(delays_event)
+  
+  delays_event=([metaInfo_24065.Event{1}]'-offset_24065)-[start_runs(1).sample]';
+  table(delays_event)
+  delays_event=([metaInfo_24068.Event{1}]'-offset_24068)-[start_runs(1).sample]';
+  table(delays_event)
+  
+    delays_event=([metaInfo_24065.Event]'-offset_24065)-[start_runs(1).sample]';
+  table(delays_event)
+  delays_event=([metaInfo_24068.Event]'-offset_24068)-[start_runs(1).sample]';
+  table(delays_event)
+  
+    delays_event=([metaInfo_24065.Event{[1:3 5]}]'-offset_24065)-[start_runs([1:3 6]).sample]';
+  table(delays_event)
+  delays_event=([metaInfo_24068.Event{:}]'-offset_24068)-[start_runs([1:3 6]).sample]';
+  table(delays_event)
+  
+      delays_event=([metaInfo_24065.Event{[2:4]}]'-offset_24065)-[start_runs([2:4]).sample]';
+  table(delays_event)
+  delays_event=([metaInfo_24068.Event{:}]'-offset_24068)-[start_runs([2:4]).sample]';
+  table(delays_event)
+  
+        delays_event=([metaInfo_24065.Event{:}]'-offset_24065)-[start_runs([1 3:4]).sample]';
+  table(delays_event)
+  delays_event=([metaInfo_24068.Event{:}]'-offset_24068)-[start_runs([1 3:4]).sample]';
+  table(delays_event)
+end
+end
+
+%% check data
+if vis
   cfg                = [];
   cfg.preproc.demean = 'yes'; % substracts the mean value (only in the plot)
   cfg.viewmode       = 'vertical';
@@ -187,104 +245,6 @@ if vis
   ft_databrowser(cfg, data_combi);
 end
 
-
-% %% temporary save the data
-% if ~exist(fullfile(root_dir, 'processed', subject, 'nirs'))
-%   mkdir(fullfile(root_dir, 'processed', subject, 'nirs'));
-% end
-% cd(fullfile(root_dir, 'processed', subject, 'nirs'))
-% save(sprintf('%s_task-gait_rec-%02d_data_online.mat', subject, rec), 'data_online')
-% save(sprintf('%s_task-gait_rec-%02d_data_combi.mat', subject, rec), 'data_combi')
-% 
-% %% apply correct layout
-% load(fullfile(root_dir, 'source_private', subject, 'structuresensor', sprintf('%s_opto_inw.mat', subject)))
-% for i=1:length(data_combi.opto.optolabel)
-%   idx=find(strcmp(opto_inw.label,data_combi.opto.optolabel{i}));
-%   data_combi.opto.optopos(i,:)=opto_inw.chanpos(idx,:);
-% end
-% data_combi.opto.unit=opto_inw.unit;
-% 
-% %% rename channel labels & types
-% % first remove battery levels from the data and the header (channel 101 &
-% % 104
-% channelsel=[1:99 101:103];
-% data_combi.label=data_combi.label(channelsel);
-% data_combi.trial{1}=data_combi.trial{1}(channelsel,:);
-% data_combi.hdr.label=data_combi.hdr.label(channelsel);
-% data_combi.hdr.nChans=data_combi.hdr.nChans-2;
-% data_combi.hdr.chantype=data_combi.hdr.chantype(channelsel);
-% data_combi.hdr.chanunit=data_combi.hdr.chanunit(channelsel);
-% 
-% % rename channel labels and types
-% for i=1:length(data_combi.hdr.label)
-%   if strcmp(data_combi.hdr.chantype{i}, 'nirs')
-%     data_combi.hdr.chantype{i}='NIRSCW';
-%     data_combi.hdr.chanunit{i}='arbitrary';
-%   elseif strcmp(data_combi.hdr.chantype{i}, 'AUX')
-%     data_combi.hdr.chantype{i}='ACCEL'; % probably not accel!!!
-%     data_combi.hrd.chanunit{i}='FIXME';
-%   end
-% end
-    
-
-%% data2bids
-% InstitutionName             = 'Radboud University';
-% InstitutionalDepartmentName = 'Donders Center for Neuroscience';
-% InstitutionAddress          = 'Heyendaalseweg 135, 6525 AJ, Nijmegen, The Netherlands';
-% TaskName                    = 'gait';
-% TaskDescription             = 'Subjects need to walk back and forth between two taped squares on the ground in which they need to make quick half turn. Halfway they encounter a 60 cm wide doorway.';
-% Instructions                = 'Follow the voice instructions. You will be asked to walk back and between the two taped squares. You step with both feet into the squares and make a quick turn (leftwards at the other side, rightwards at this side). Now and then, you will have to stand still for 30 seconds. During this period of time, you may prepare for the next block by stepping through the doorway or turning in the square. Start walking again when asked for.';
-% 
-% cfg = [];
-% 
-% cfg.dataset_description.Name                        = 'PROMPT_freezing_fnirs_pilot';
-% cfg.dataset_description.DatasetType                 = 'raw';
-% cfg.dataset_description.Licence                     = 'PD'; %CHECKME
-% cfg.dataset_description.Authors                     = 'H.M.Cockx, R.Oostenveld, F. Nieuwhof, I.G.M. Cameron, R.J.A. van Wezel'; %CHECKME
-% cfg.dataset_description.Acknowledgements            = 'A. van Setten, R. Jobse'; %FIXME;
-% cfg.dataset_description.Funding                     = 'FIXME';
-% cfg.dataset_description.EthicsApprovals             = 'CMO Arnhem-Nijmegen (protocol NL70915.091.19)';
-% % ...
-% 
-% cfg.InstitutionName             = InstitutionName;
-% cfg.InstitutionalDepartmentName = InstitutionalDepartmentName;
-% cfg.InstitutionAddress          = InstitutionAddress;
-% cfg.Manufacturer                = 'Artinis Medical Systems';
-% cfg.ManufacturersModelName      = 'Brite24 + Brite24';
-% cfg.DeviceSerialNumber          = '24065 + 24068'; % CHECKME
-% cfg.SoftwareVersion             = 'Oxysoft 3.2.70 x64';
-% cfg.nirs.CapManufacturer             = 'Artinis Medical Systems';
-% cfg.nirs.CapManufacturersModelName   = 'Headcap with print (customized holes)';
-% cfg.nirs.SourceType                  = 'LED';
-% 
-% cfg.TaskName                    = TaskName;
-% cfg.TaskDescription             = TaskDescription;
-% cfg.Instructions                = Instructions;
-% 
-% cfg.coordsystem.NIRSCoordinateSystem                            = 'CTF';
-% cfg.coordsystem.NIRSCoordinateUnits                             = data_combi.opto.unit;
-% cfg.coordsystem.NIRSCoordinateSystemDescription                 = 'CTF head coordinates, orientation ALS, origin between the ears';
-% cfg.coordsystem.NIRSCoordinateProcessingDescription             = 'optode positions have been moved 5mm inwards to represent the locations of skin contact';
-% cfg.coordsystem.FiducialsDescription                            = 'Stickers were placed on the anatomical landmarks and subsequently localized with the help of a StructureSensor'; 
-% cfg.coordsystem.FiducialsCoordinates                            = sprintf('"NAS": [%s], "LPA": [%s], "RPA": [%s]', num2str(opto_inw.chanpos(strcmp(opto_inw.label,'Nz'),:),'% .2f'), num2str(opto_inw.chanpos(strcmp(opto_inw.label,'LPA'),:),'% .2f'), num2str(opto_inw.chanpos(strcmp(opto_inw.label,'RPA'),:),'% .2f'))
-% cfg.coordsystem.FiducialsCoordinateSystem                       = 'CTF';
-% cfg.coordsystem.FiducialsCoordinateUnits                        = data_combi.opto.unit;
-% cfg.coordsystem.FiducialsCoordinateSystemDescription            = 'CTF head coordinates, orientation ALS, origin between the ears';
-% 
-% cfg.bidsroot = fullfile(root_dir, 'raw');
-% cfg.sub = subID;
-% cfg.method = 'convert'; % or convert from .oxy4 --> .snirf?
-% cfg.datatype = 'nirs';
-% cfg.writejson='replace'; % or merge
-% cfg.writetsv='replace'; % or merge
-% 
-% cfg.outputfile =filename_output;
-% 
-% cfg.events = event; % don't try to parse the AUX channels
-% % fixme: do not select TTL events or FOG events
-% 
-% 
-% data2bids(cfg, data_combi);
 
 %% SUBFUNCTIONS %%
 function event=trig_detect(dat, chan, beginsmp, endsmp, threshold)
