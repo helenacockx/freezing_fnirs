@@ -32,6 +32,8 @@ data_online=ft_preprocessing(cfg);
 
 % offline data 24065 (==> gather metainfo form readoxy3?)
 [rawOD_24065,metaInfo_24065,ADvalues_24065] = readoxy3file(filename_24065);
+global ADC % ADvalues of readoxy3file.m are converted in line 113
+ADvalues_24065=ADC'; 
 metaInfo_24065.OptodeTemplateID = 131;
 metaInfo_24065.DPF = [6 6]; % see online file
 metaInfo_24065.Position = [30 30]; % see optodetemplates.xml (DistanceScale)
@@ -43,6 +45,8 @@ metaInfo_24065.Gradient = [5 5];% not sure what this means, taken over from onli
 
 % offline data 24068
 [rawOD_24068,metaInfo_24068,ADvalues_24068] = readoxy3file(filename_24068);
+global ADC
+ADvalues_24068=ADC';
 metaInfo_24068.OptodeTemplateID = 130;
 metaInfo_24068.DPF = [6 6]; % see online file
 metaInfo_24068.Position = [30 30]; % see optodetemplates.xml (DistanceScale)
