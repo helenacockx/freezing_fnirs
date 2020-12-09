@@ -3,6 +3,7 @@ close all; clear all; diary off
 ft_info off
 ft_notice off
 
+%%
 root_dir='C:\Users\helen\Documents\freezing_fnirs\data';
 source_private='F:\freezing_fnirs\source_private';
 addpath C:\Users\helen\Documents\MATLAB\matlab_toolboxes\fix_artinis
@@ -20,7 +21,7 @@ num_block=sub_info.num_block;
 %nirs
 delay_devices=0;
 
-% make processed folder
+%% make processed folder
 subfolders={'nirs', 'motion', 'video', 'stim'};
 for i=1:length(subfolders)
   mkdir(fullfile(root_dir, 'processed', sub, subfolders{i}));
@@ -150,10 +151,11 @@ for r=1:num_run
   % check synchronisation
   [x, y, z]=q2e(data_raw.trial{1}(25,:), data_raw.trial{1}(26,:), data_raw.trial{1}(27,:), data_raw.trial{1}(28,:)); % convert head orientation to euler angles
   orient=rad2deg([x;y;z]); % convert from radians to degrees
-  figure;
-  ax1=subplot(2,1,1);   plot(run(r).data_nirs.data_raw.time{1}, run(r).data_nirs.data_raw.trial{1}(102,:));axis([30 90 4.092 4.098]); title('heading Brite24 (24068) orientation');
-  ax2=subplot(2,1,2); plot(data_raw.time{1}, orient(1,:)); axis([30 90 -30 30]); title('heading Xsens head orientation');
-  linkaxes([ax1, ax2], 'x')
+  figure; plot(run(r).data_nirs.data_raw.time{1}, run(r).data_nirs.data_raw.trial{1}(102,:));
+  hold on; plot(data_raw.time{1}, orient(1,:)*-1); axis([30 90 -30 30]); legend({'heading Brite24 (24068) orientation', 'heading Xsens head orientation'}); title('xsens vs brite')
+%   ax1=subplot(2,1,1);   plot(run(r).data_nirs.data_raw.time{1}, run(r).data_nirs.data_raw.trial{1}(102,:));axis([30 90 4.092 4.098]); title('heading Brite24 (24068) orientation');
+%   ax2=subplot(2,1,2); plot(data_raw.time{1}, orient(1,:)); axis([30 90 -30 30]); title('heading Xsens head orientation');
+%   linkaxes([ax1, ax2], 'x')
   fprintf('Please check the delay between the two data streams. Enter when ready. \n'); pause;
   confirm=0;
   while confirm~=1
@@ -282,3 +284,5 @@ script=mfilename('fullpath');
 script_name=mfilename;
 copyfile(sprintf('%s.m', script), fullfile(root_dir, 'scripts', sub, sprintf('%s_%s.m', sub, script_name)))
 diary off;
+ft_info on
+ft_notice on

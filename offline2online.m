@@ -32,7 +32,7 @@ data_online=ft_preprocessing(cfg);
 
 % offline data 24065 (==> gather metainfo form readoxy3?)
 [rawOD_24065,metaInfo_24065,ADvalues_24065] = readoxy3file(filename_24065);
-global ADC % ADvalues of readoxy3file.m are converted in line 113
+global ADC; % ADvalues of readoxy3file.m are converted in line 113
 ADvalues_24065=ADC'; 
 metaInfo_24065.OptodeTemplateID = 131;
 metaInfo_24065.DPF = [6 6]; % see online file
@@ -45,7 +45,7 @@ metaInfo_24065.Gradient = [5 5];% not sure what this means, taken over from onli
 
 % offline data 24068
 [rawOD_24068,metaInfo_24068,ADvalues_24068] = readoxy3file(filename_24068);
-global ADC
+global ADC;
 ADvalues_24068=ADC';
 metaInfo_24068.OptodeTemplateID = 130;
 metaInfo_24068.DPF = [6 6]; % see online file
@@ -160,7 +160,7 @@ if isfield(metaInfo_24065, 'Event') & isfield(metaInfo_24068, 'Event') & ~strcmp
   end
   fprintf('correcting for this delay... \n')
   delay_devices=offset_devices-(offset_24068-offset_24065);
-  offset_24065=offset_24065-delay_devices;
+  offset_24068=offset_24068+delay_devices;
 else
   figure; plot(ADvalues_24065(3, 50:end)); hold on; plot(ADvalues_24068(3, 50:end)); title(sprintf('sub-%s rec-%s: 24065 vs 24068', fparts.sub, fparts.rec)); legend({'24065', '24068'});
   fprintf('No synchronisation event was inserted in the offline files. Please check in the figure what the delay is between the two offline files \n');
@@ -170,7 +170,7 @@ else
     confirm = input('Is this the definite answer? 1/0 \n');
   end
   delay_devices=offset_devices-(offset_24068-offset_24065);
-  offset_24065=offset_24065-delay_devices;
+  offset_24068=offset_24068-delay_devices;
 end  
 
 % apply offsets to the offline data 
@@ -192,7 +192,7 @@ data_combi.hdr.nSamples=nsamples;
 if vis
   figure; subplot(3,1,1); plot(data_online.trial{1}(3,50:end), 'b-'); hold on; plot(data_combi.trial{1}(3,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24065 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
   subplot(3,1,2); plot(data_online.trial{1}(53,50:end), 'b-'); hold on; plot(data_combi.trial{1}(53,50:end), 'g.'); title(sprintf('sub-%s rec-%s: 24068 vs online', fparts.sub, fparts.rec)); legend({'offline data', 'online data'});
-  subplot(3,1,3); plot(data_combi.trial{1}(99, 50:end)); hold on; plot(data_combi.trial{1}(103, 50:end)); title(sprintf('sub-%s rec-%s: 24065 vs 24068', fparts.sub, fparts.rec)); legend({'24065', '24068'})
+  subplot(3,1,3); plot(data_combi.trial{1}(99, 50:end)); hold on; plot(data_combi.trial{1}(103, 50:end)); title(sprintf('sub-%s rec-%s: 24065 vs 24068', fparts.sub, fparts.rec)); legend({'24065', '24068'});
 end
 
 %% read in events
