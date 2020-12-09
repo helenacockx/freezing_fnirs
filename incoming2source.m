@@ -31,15 +31,15 @@
 %% Set parameters
 clear all
 root_dir = 'C:\Users\helen\Documents\freezing_fnirs\data';
-sub='sub-PD11';
+sub='sub-PD15';
 cd(root_dir)
 
 rec_video=true;
-rec_nirs=[1];
+rec_nirs=[2];
 nirs_offline=true;
-rec_motion=[1 1 1 1 1];
-take_motion=[1 2 3 4 5]; %of all recordings
-run_motion=[1 2 3 4 5];
+rec_motion=[1 1 1 1];
+take_motion=[1:4]; %of all recordings
+run_motion=[1:4];
 rec_stim=[1];
 
 %% create source directory structure
@@ -69,7 +69,7 @@ for i=1:3
         filename_n=sprintf('%s_task-gait_%s_rec-%.2d_video.mp4', sub,  acq{i}, j);
         [success, message]=movefile(fullfile(files(j).folder, files(j).name),fullfile(video_outgo, filename_n));
         if success
-            fprintf('\n File successfully moved to source directory: %s', filename_n);
+            fprintf('File successfully moved to source directory: %s \n', filename_n);
         end
     end
 end
@@ -77,9 +77,9 @@ end
 % all files moved to source directory?
 files=dir(video_incom);
 if length(files)>5 %contains directory ., .., acq-mobile, acq-end, acq-begin
-    warning('\n Remaining files in incoming directory \n')
+    warning('Remaining files in incoming directory')
 else
-    fprintf('\n No remaining files in incoming directory \n');
+    fprintf('No remaining files in incoming directory \n\n');
 end
 end
 
@@ -97,7 +97,7 @@ file=dir(fullfile(nirs_incom, filename_o));
 if length(file)==1
   [success, message]=movefile(fullfile(file.folder, file.name), fullfile(nirs_outgo, filename_n));
   if success
-    fprintf('\n File successfully moved to source directory: %s', filename_n);
+    fprintf('File successfully moved to source directory: %s \n', filename_n);
   end
 else
   warning(sprintf('No file named %s in incoming directory', filename_o));
@@ -112,7 +112,7 @@ for i=1:length(rec_nirs)
         if length(file)==1
             [success, message]=movefile(fullfile(file.folder, file.name), fullfile(nirs_outgo, filename_n));
             if success
-                fprintf('\n File successfully moved to source directory: %s', filename_n);
+                fprintf('File successfully moved to source directory: %s \n', filename_n);
             end
         else
             warning(sprintf('No file named %s in incoming directory', filename_o));
@@ -133,7 +133,7 @@ if nirs_offline
       filename_n=sprintf('%s_task-gait_%s_rec-%.2d_nirs.oxy3', sub, acq{a}, rec_nirs(i));
       [success, message]=movefile(fullfile(files(i).folder, files(i).name), fullfile(nirs_outgo, filename_n));
       if success
-        fprintf('\n File successfully moved to source directory: %s', filename_n);
+        fprintf('File successfully moved to source directory: %s \n', filename_n);
       end
     end
   end
@@ -143,9 +143,9 @@ end
 [success, message]=movefile(fullfile(nirs_incom, 'DAQ'), fullfile(nirs_outgo, 'DAQ'));
 files=dir(fullfile(nirs_outgo, 'DAQ'));
 if success
-    fprintf('\n File successfully moved to source directory: %s consisting of %d screenshots', 'DAQ', length(files)-2);
-    if length(files)-2~=8
-      warning('not all 8 screenshots were captured')
+    fprintf('File successfully moved to source directory: %s consisting of %d screenshots \n', 'DAQ', length(files)-2);
+    if length(files)-2~=12
+      warning('not all 12 screenshots were captured')
     end
 end
 
@@ -153,9 +153,9 @@ end
 % all files moved to source directory?
 files=dir(fullfile(nirs_incom, '**/*.*'));
 if length(files)>8 %contains directory . and .. (x3); and acq-24065, acq-24068
-    warning(sprintf('\n Remaining files in incoming directory \n'))
+    warning(sprintf('Remaining files in incoming directory'))
 else
-    fprintf('\n No remaining files in incoming directory \n');
+    fprintf('No remaining files in incoming directory \n\n');
 end
 end
 
@@ -170,7 +170,7 @@ files=dir(fullfile(motion_incom, '*bodydimensions.mvna'));
 if length(files)==1
     [success, message]=movefile(fullfile(files(1).folder, files(1).name),fullfile(motion_outgo, files(1).name));
     if success
-        fprintf('\n File successfully moved to source directory: %s', files(1).name);
+        fprintf('File successfully moved to source directory: %s \n', files(1).name);
     end
 else
     warning('No file named *.bodydimensions.mvna or multiple files named like that');
@@ -185,7 +185,7 @@ for i=1:length(rec_motion)
         if length(file)==1
             [success, message]=movefile(fullfile(file.folder, file.name),fullfile(motion_outgo,filename_n));
             if success
-                fprintf('\n File successfully moved to source directory: %s', filename_n);
+                fprintf('File successfully moved to source directory: %s \n', filename_n);
             end
         else
             warning('No file named %s in incoming directory',  filename_o);
@@ -196,9 +196,9 @@ end
 % all files moved to source directory?
 files=dir(motion_incom);
 if length(files)>2 %contains directory . and ..
-    warning('Remaining files in incoming directory \n')
+    warning('Remaining files in incoming directory')
 else
-    fprintf('\n No remaining files in incoming directory \n');
+    fprintf('No remaining files in incoming directory \n\n');
 end
 end
 
@@ -213,13 +213,14 @@ m_script=dir(fullfile(stim_incom, sprintf('%s_script_freezing_fnirs*.m', sub)));
 if length(m_script)==1
     [success, message]=movefile(fullfile(m_script(1).folder, m_script(1).name),fullfile(stim_outgo, m_script(1).name));
     if success
-        fprintf('\n File successfully moved to source directory: %s', m_script(1).name);
+        fprintf('File successfully moved to source directory: %s \n', m_script(1).name);
     end
 else
-    warning('\n No file named *_script_freezing_fnirs*.m in incoming directory or multiple files named like that');
+    warning('No file named *_script_freezing_fnirs*.m in incoming directory or multiple files named like that');
 end
 
 % move stim files of practice recording to source directory
+if ~strcmp(sub, 'sub-HC90') % practice recording was saved under PD61
 for e=1:length(ext)-1
   filename_o=sprintf('%s_rec-practice_%s', sub, ext{e});
   filename_n=sprintf('%s_task-gait_rec-practice_%s', sub, ext{e});
@@ -227,11 +228,12 @@ for e=1:length(ext)-1
   if length(file)==1
     [success, message]=movefile(fullfile(file.folder, file.name), fullfile(stim_outgo, filename_n));
     if success
-      fprintf('\n File successfully moved to source directory: %s', filename_n);
+      fprintf('File successfully moved to source directory: %s \n', filename_n);
     end
   else
-    warning('\n No file named %s in incoming directory', filename_o);
+    warning('No file named %s in incoming directory', filename_o);
   end
+end
 end
 
 % move stim files to source directory
@@ -243,10 +245,10 @@ for i=1:length(rec_stim)
         if length(file)==1
             [success, message]=movefile(fullfile(file.folder, file.name), fullfile(stim_outgo, filename_n));
             if success
-                fprintf('\n File successfully moved to source directory: %s', filename_n);
+                fprintf('File successfully moved to source directory: %s \n', filename_n);
             end
         else
-            warning('\n No file named %s in incoming directory', filename_o);
+            warning('No file named %s in incoming directory', filename_o);
         end
     end
 end
@@ -254,9 +256,9 @@ end
 % all files moved to source directory?
 files=dir(stim_incom);
 if length(files)>2 %contains directory . and ..
-    warning('\n Remaining files in incoming directory \n')
+    warning('Remaining files in incoming directory')
 else
-    fprintf('\n No remaining files in incoming directory \n');
+    fprintf('No remaining files in incoming directory \n\n');
 end
 end
 
@@ -272,19 +274,19 @@ for e=1:length(ext)
     if length(file)==1
         [success, message]=movefile(fullfile(file.folder, file.name), fullfile(ss_outgo,file.name));
         if success
-            fprintf('\n File successfully moved to source directory: %s',file.name);
+            fprintf('File successfully moved to source directory: %s \n',file.name);
         end
     else
-        warning('\n No file named %s in incoming directory',  sprintf('Model.%s', ext{e}));
+        warning('No file named %s in incoming directory \n',  sprintf('Model.%s', ext{e}));
     end
 end
 
 % all files moved to source directory?
 files=dir(fullfile(ss_incom, 'Model'));
 if length(files)>2 %contains directory . and ..
-    warning('\n Remaining files in incoming directory \n')
+    warning('Remaining files in incoming directory')
 else
-    fprintf('\n No remaining files in incoming directory \n');
+    fprintf('No remaining files in incoming directory \n\n');
 end
 
 %% questionnaires
@@ -303,19 +305,19 @@ for e=1:length(ext)
     if length(file)==1
         [success, message]=movefile(fullfile(file.folder, file.name), fullfile(quest_outgo, filename_n));
         if success
-            fprintf('\n File successfully moved to source directory: %s', filename_n);
+            fprintf('File successfully moved to source directory: %s \n', filename_n);
         end
     else
-        warning('\n No file named %s in incoming directory',  sprintf('%s_%s', sub, ext{e}));
+        warning('No file named %s in incoming directory',  sprintf('%s_%s', sub, ext{e}));
     end
 end
 
 % all files moved to source directory?
 files=dir(fullfile(quest_incom));
 if length(files)>2 %contains directory . and ..
-    warning('\n Remaining files in incoming directory \n')
+    warning('Remaining files in incoming directory')
 else
-    fprintf('\n No remaining files in incoming directory \n');
+    fprintf('No remaining files in incoming directory \n\n');
 end
 
 
