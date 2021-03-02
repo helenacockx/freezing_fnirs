@@ -10,16 +10,13 @@ addpath C:\Users\helen\Documents\MATLAB\matlab_toolboxes\fix_artinis
 addpath(fullfile(root_dir, 'scripts'))
 dbstop if error
 
-ID='HC66';
+ID='PD22';
 sub=['sub-' ID];
 sub_info=load_sub_info(ID);
 runs=sub_info.runs;
 num_run=sub_info.num_run;
 num_block=sub_info.num_block; 
 % completed subjects: PD11, HC66
-
-%nirs
-delay_devices=0;
 
 %% make processed folder
 subfolders={'nirs', 'motion', 'video', 'stim'};
@@ -56,18 +53,76 @@ end
 % check delay between events and calculate corrections
 lsl_events=test_delay(REC);
 
+%% load motion data
+run=[];
+% select the corresponding lsl events
+fprintf('\n\n.........loading motion data.........\n')
+lslstream='lsldert4_events';
+start_runs=lsl_events(contains(lsl_events.type, lslstream) & contains(lsl_events.value, 'TTL_on'),:);
+stop_runs=lsl_events(contains(lsl_events.type, lslstream) & contains(lsl_events.value, 'TTL_off'),:);
+
+for r=1:num_run
+  fprintf('\n LOADING RUN %d \n', runs(r))
+  mvnxfile=dir(fullfile(root_dir, 'source_standard', sub, 'motion', sprintf('*_run-%02d*.mvnx', runs(r))));
+  if isempty(mvnxfile)
+    error('could not find the correct motion file');
+  end
+  % load data
+  cfg=[];
+  cfg.datafile=fullfile(mvnxfile.folder, mvnxfile.name);
+  data_raw=ft_preprocessing(cfg);
+  % check duration of recording
+  duration_diff=data_raw.time{1}(end)-(stop_runs.onset(r)-start_runs.onset(r));
+  if abs(duration_diff)>0.1
+    if duration_diff>0
+      warning('duration of .mvnx file run %d differed with more than 100 msec of what was expected. .mvnx was %03f milliseconds longer than expected.', runs(r), abs(duration_diff)*1000)
+      warning('removing the first %.03d milliseconds from the recording. Please check with video if this is correct.', abs(duration_diff)/1000)
+      corr_onset=duration_diff;
+    else
+      warning('duration of .mvnx file run %d differed with more than 100 msec of what was expected. .mvnx was %03f seconds shorter than expected.', runs(r), abs(duration_diff)*1000)
+    end
+  else
+    fprintf('duration of .mvnx file run %d and lsl stream differed with %03f milliseconds (.mvnx - lsl stream)\n', runs(r),duration_diff*1000)
+    corr_onset=0;
+  end
+  % check data by plotting trajectory of COM
+  idx_COM=match_str(data_raw.label, {'seg_COM_centerOfMass_X','seg_COM_centerOfMass_Y','seg_COM_centerOfMass_Z'});
+  figure; plot3(data_raw.trial{1}(idx_COM(1),:), data_raw.trial{1}(idx_COM(2),:),data_raw.trial{1}(idx_COM(3),:), '.'); view(2);title(sprintf('gait trajectory of run %d', runs(r))); xlabel('X'); ylabel('Y')
+  % make events
+  onset = [0 data_raw.time{1}(end)]';
+  onset_corrected = [corr_onset data_raw.time{1}(end)]';
+  duration = [0 0]';
+  type={'sync-event', 'sync-event'}';
+  value = {'start_run', 'stop_run'}';
+  run_events=table(onset, onset_corrected, duration, type, value);
+  % save data and events
+  [~, n, ~]=fileparts(mvnxfile.name);
+  fparts=regexp(mvnxfile.name, 'sub-(?<sub>\w+)_task-gait_run-(?<run>\d+)_motion', 'names');
+  save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_motion.mat', fparts.sub, fparts.run)), 'data_raw');
+  save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_events.mat', fparts.sub, fparts.run)), 'run_events');
+  % realign time axis and save in run
+  start_run=onset_corrected(1);
+  stop_run=onset_corrected(2);
+  cfg=[];
+  cfg.trl=[round(start_run*data_raw.fsample)+1 round(stop_run*data_raw.fsample)+1 0];
+  data_run=ft_redefinetrial(cfg, data_raw);
+  data_run=rmfield(data_run, 'sampleinfo'); data_run.cfg=rmfield(data_run.cfg, 'trl'); % remove sampleinfo, otherwise FT still considers the original sample numbers
+  run(runs(r)).data_motion.data_raw=data_run;
+end
+
+% save data
+save(fullfile(root_dir, 'processed', sub, sprintf('sub-%s_run.mat', ID)), 'run')
 
 %% load nirs data
 fprintf('\n\n.........loading nirs data.........\n')
 oxy4files=dir(fullfile(root_dir, 'source_standard', sub, 'nirs', '*acq-online*.oxy4'));
 r=1;
-run=[];
 
 for f=1:length(oxy4files)
-[data_combi, nirsevents]=offline2online(fullfile(oxy4files(f).folder, oxy4files(f).name), 'delay_devices', delay_devices);
+[data_nirs, nirsevents]=offline2online_v2(fullfile(oxy4files(f).folder, oxy4files(f).name));
 % temporary save data_combi
 fparts=regexp(oxy4files(f).name, 'sub-(?<sub>\w+)_task-gait_acq-(?<acq>\w+)_rec-(?<rec>\d+)_nirs', 'names');
-save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-%s_nirs.mat', fparts.sub, fparts.rec)), 'data_combi')
+save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-%s_nirs.mat', fparts.sub, fparts.rec)), 'data_nirs')
 
 % check events
 [hdr, ~]=readoxy4(fullfile(oxy4files(f).folder, oxy4files(f).name));
@@ -96,8 +151,9 @@ else
   fprintf('maximum delay between .oxy4 file and lsl stream was %.03f seconds \n',  max(abs([lsl_nirsevents.onset(:)]-lsl_nirsevents.onset(1)-([oxy4_nirsevents(:).sample]'-oxy4_nirsevents(1).sample)/50)))
 end
 figure; plot([oxy4_nirsevents.sample], ones(size(oxy4_nirsevents)), '+'); title('nirs events');
+  
 % convert events to table
-fsample=data_combi.fsample;
+fsample=data_nirs.fsample;
 nirs_events=struct2table(oxy4_nirsevents);
 onset=([oxy4_nirsevents(:).sample]'-1)/fsample;
 onset_corrected=onset-lsl_nirsevents.correction;
@@ -107,21 +163,57 @@ type=repmat({'sync-event'}, size(onset));
 value={oxy4_nirsevents(:).value}';
 if strcmp(ID, 'PD61') % calculate onset of first start_run event
   onset_corrected(1)=onset(2)-(lsl_nirsevents.onset(2)-lsl_nirsevents.onset(1))-lsl_nirsevents.correction(1);
-  sample(1)=round(onset_corrected(1)*data_combi.fsample)+1; % needed to split into runs
+  sample(1)=round(onset_corrected(1)*data_nirs.fsample)+1; % needed to split into runs
 end
 nirs_events=table(onset, sample, onset_corrected,  duration, type, value);
 % save events
+% FIXME: if desynchronisation between xsens and nirs --> correct
+% timestamps?
 save(fullfile(root_dir, 'processed', sub, 'nirs', sprintf('sub-%s_task-gait_rec-%s_events.mat', fparts.sub, fparts.rec)), 'nirs_events')
 
 % split in runs
 start_runs=nirs_events(contains(nirs_events.value, 'start_run'),:);
 stop_runs=nirs_events(contains(nirs_events.value, 'stop_run'),:);
 for i=1:height(start_runs)
-  % data
+  % split data
   cfg=[];
   cfg.trl=[start_runs.sample(i) stop_runs.sample(i) 0];
-  data_run=ft_redefinetrial(cfg, data_combi);
-  data_run=rmfield(data_run, 'sampleinfo'); data_run.cfg=rmfield(data_run.cfg, 'trl'); % remove sampleinfo, otherwise FT still considers the original sample numers
+  data_run=ft_redefinetrial(cfg, data_nirs);
+  % resample to 60 Hz (cfr. xsens)
+  cfg=[];
+  cfg.resamplefs=60;
+  data_run=ft_resampledata(cfg, data_run);
+  % load motion data and convert
+  data_motion=run(runs(r)).data_motion.data_raw;
+  [x, y, z]=q2e(data_motion.trial{1}(25,:), data_motion.trial{1}(26,:), data_motion.trial{1}(27,:), data_motion.trial{1}(28,:)); % convert head orientation to euler angles
+  orient=rad2deg([x;y;z]); % convert from radians to degrees
+  % calculate offset between nirs data and motion data
+  [corr, lags]=xcorr(-orient(1,:), data_run.trial{1}(102,:));
+  [~, idx]=max(corr);
+  offset_data=lags(idx);
+  fprintf('offset between the data streams was %d samples (nirs-motion) \n', offset_data)
+  fprintf('applying offset... \n')
+  if offset_data~=0
+    % update start_runs
+    start_runs.sample=start_runs.sample-round(offset_data/data_run.fsample*data_nirs.fsample)
+    stop_runs.sample=stop_runs.sample-round(offset_data/data_run.fsample*data_nirs.fsample)
+    % redefine trials
+    cfg.trl=[start_runs.sample(i) stop_runs.sample(i) 0];
+    data_run=ft_redefinetrial(cfg, data_nirs);
+    % resample to 60 Hz (cfr. xsens)
+    cfg=[];
+    cfg.resamplefs=60;
+    data_run=ft_resampledata(cfg, data_run);
+    % update nirs_events...
+    % FIXME
+  end
+%   data_run=rmfield(data_run, 'sampleinfo'); data_run.cfg=rmfield(data_run.cfg, 'trl'); % remove sampleinfo, otherwise FT still considers the original sample numers
+  % check data
+  figure; plot(data_motion.time{1}, orient(1,:)*-1); 
+  hold on; plot(data_run.time{1}, data_run.trial{1}(102,:));
+  axis([30 90 -30 30]); legend({'heading Xsens head orientation', 'heading Brite24 (24068) orientation'}); title('xsens vs brite')
+
+  % save data in run
   run(runs(r)).data_nirs.data_raw=data_run;
   r=r+1;
 end
@@ -130,68 +222,6 @@ end % loop over rec
 % save data
 save(fullfile(root_dir, 'processed', sub, sprintf('sub-%s_run.mat', ID)), 'run')
 
-
-%% load motion data
-% select the corresponding lsl events
-fprintf('\n\n.........loading motion data.........\n')
-lslstream='lsldert4_events';
-start_runs=lsl_events(contains(lsl_events.type, lslstream) & contains(lsl_events.value, 'TTL_on'),:);
-stop_runs=lsl_events(contains(lsl_events.type, lslstream) & contains(lsl_events.value, 'TTL_off'),:);
-
-for r=1:num_run
-  fprintf('\n LOADING RUN %d \n', runs(r))
-  mvnxfile=dir(fullfile(root_dir, 'source_standard', sub, 'motion', sprintf('*_run-%02d*.mvnx', runs(r))));
-  if isempty(mvnxfile)
-    error('could not find the correct motion file');
-  end
-  % load data
-  cfg=[];
-  cfg.datafile=fullfile(mvnxfile.folder, mvnxfile.name);
-  data_raw=ft_preprocessing(cfg);
-  % check synchronisation
-  [x, y, z]=q2e(data_raw.trial{1}(25,:), data_raw.trial{1}(26,:), data_raw.trial{1}(27,:), data_raw.trial{1}(28,:)); % convert head orientation to euler angles
-  orient=rad2deg([x;y;z]); % convert from radians to degrees
-  figure; plot(run(r).data_nirs.data_raw.time{1}, run(r).data_nirs.data_raw.trial{1}(102,:));
-  hold on; plot(data_raw.time{1}, orient(1,:)*-1); axis([30 90 -30 30]); legend({'heading Brite24 (24068) orientation', 'heading Xsens head orientation'}); title('xsens vs brite')
-%   ax1=subplot(2,1,1);   plot(run(r).data_nirs.data_raw.time{1}, run(r).data_nirs.data_raw.trial{1}(102,:));axis([30 90 4.092 4.098]); title('heading Brite24 (24068) orientation');
-%   ax2=subplot(2,1,2); plot(data_raw.time{1}, orient(1,:)); axis([30 90 -30 30]); title('heading Xsens head orientation');
-%   linkaxes([ax1, ax2], 'x')
-  fprintf('Please check the delay between the two data streams. Enter when ready. \n'); pause;
-  confirm=0;
-  while confirm~=1
-    delay=input('What is the delay between the two data streams? \n')
-    confirm = input('Is this the definite answer? 1/0 \n');
-  end
-  % calculate delay of end recording
-  delay_endrec=data_raw.time{1}(end)+delay-run(r).data_nirs.data_raw.time{1}(end);
-  fprintf('The recording was ended with a delay of %.03f sec.', delay_endrec); 
-  % check data by plotting trajectory of COM
-  idx_COM=match_str(data_raw.label, {'seg_COM_centerOfMass_X','seg_COM_centerOfMass_Y','seg_COM_centerOfMass_Z'});
-  figure; plot3(data_raw.trial{1}(idx_COM(1),:), data_raw.trial{1}(idx_COM(2),:),data_raw.trial{1}(idx_COM(3),:), '.'); view(2);title(sprintf('gait trajectory of run %d', runs(r))); xlabel('X'); ylabel('Y')
-  % make events
-  onset = [0 data_raw.time{1}(end)]';
-  onset_corrected = [0-start_runs.correction(r)-delay data_raw.time{1}(end)-stop_runs.correction(r)-delay_endrec]';
-  duration = [0 0]';
-  type={'sync-event', 'sync-event'}';
-  value = {'start_run', 'stop_run'}';
-  run_events=table(onset, onset_corrected, duration, type, value);
-  % save data and events
-  [~, n, ~]=fileparts(mvnxfile.name);
-  fparts=regexp(mvnxfile.name, 'sub-(?<sub>\w+)_task-gait_run-(?<run>\d+)_motion', 'names');
-  save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_motion.mat', fparts.sub, fparts.run)), 'data_raw');
-  save(fullfile(root_dir, 'processed', sub, 'motion', sprintf('sub-%s_task-gait_run-%s_events.mat', fparts.sub, fparts.run)), 'run_events');
-  % realign time axis and save in run
-  start_run=onset_corrected(1);
-  stop_run=onset_corrected(2);
-  cfg=[];
-  cfg.trl=[round(start_run*data_raw.fsample)+1 round(stop_run*data_raw.fsample)+1 0];
-  data_run=ft_redefinetrial(cfg, data_raw);
-  data_run=rmfield(data_run, 'sampleinfo'); data_run.cfg=rmfield(data_run.cfg, 'trl'); % remove sampleinfo, otherwise FT still considers the original sample numbers
-  run(runs(r)).data_motion.data_raw=data_run;
-end
-
-% save data
-save(fullfile(root_dir, 'processed', sub, sprintf('sub-%s_run.mat', ID)), 'run')
 
 %% load video data
 fprintf('\n\n.........loading video data.........\n')

@@ -170,7 +170,7 @@ else
     confirm = input('Is this the definite answer? 1/0 \n');
   end
   delay_devices=offset_devices-(offset_24068-offset_24065);
-  offset_24068=offset_24068-delay_devices;
+  offset_24068=offset_24068+delay_devices;
 end  
 
 % apply offsets to the offline data 
@@ -238,14 +238,15 @@ if vis
   cfg                = [];
   cfg.preproc.demean = 'yes'; % substracts the mean value (only in the plot)
   cfg.viewmode       = 'vertical';
-  cfg.channel = 'Rx*';
+  cfg.channel = {'Rx*', 'ADC001', 'ADC002', 'ADC003', 'ADC005', 'ADC006', 'ADC007'};
   cfg.event =events;
   cfg.ploteventlabels= 'colorvalue';
   cfg.plotlabels= 'yes';
   cfg.fontsize=5;
   cfg.continuous     = 'yes';
   cfg.blocksize  = 60;
-  cfg.nirsscale =100;
+  cfg.nirsscale =150;
+  cfg.ylim = [-1 1];
   ft_databrowser(cfg, data_combi);
 end
 
